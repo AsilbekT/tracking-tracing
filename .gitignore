@@ -1,0 +1,6 @@
+telegram_bot/credentials.py
+telegram_bot/management/commands/fetch_trailer_locations copy.py
+telegram_bot/management/commands/fetch_trailer_locations.py
+telegram_bot/management/commands/fetch_trailers.py
+testai.py
+tracking/settings.py

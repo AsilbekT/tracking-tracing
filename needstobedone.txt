@@ -1,0 +1,4 @@
+auto group adding to the driver
+auto load adding to the driver
+auto trailer assigning to the driver
+auto trailer update miles left sending to the broker group
