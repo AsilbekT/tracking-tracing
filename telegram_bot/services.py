@@ -2,8 +2,10 @@
 
 from datetime import datetime
 import re
-from .models import Broker, Driver, Trailer, Load
+from .models import Broker, Driver, TelegramMessage, Trailer, Load
 import logging
+import json
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -165,17 +167,23 @@ def get_trailer_info(trailer_id):
         return "Error processing your request."
 
 
-def generate_status_message(driver):
+def generate_status_message(driver=None, load_id=None):
     try:
-        # Get the latest load assigned to the driver
-        load = driver.loads.filter(
-            status="in_progress").latest('delivery_time')
+        if load_id:
+            load = Load.objects.get(load_number=load_id)
+            is_late, message = load.is_late()
+            if is_late:
+                return message, False, load
+        else:
+            load = driver.loads.filter(
+                status="in_progress").latest('delivery_time')
+        print(load, "nothing")
         trailer = load.assigned_trailer
 
         # Format the message with HTML
         status_message = (
-            f"🚚 <b>Driver Status Update</b> 🚚\n"
-            f"<b>Driver:</b> {driver.name}\n"
+            f"<b>Driver Status Update</b>\n"
+            f"<b>Driver:</b> {driver.name if driver else 'N/A'}\n"
             f"<b>Load Number:</b> {load.load_number}\n"
             f"<b>Status:</b> {load.status.replace('_', ' ').title()}\n"
             f"<b>Pickup Location:</b> {load.delivery_location}\n"
@@ -187,13 +195,44 @@ def generate_status_message(driver):
                 f"<b>Trailer:</b> {trailer.name}\n"
                 f"<b>Current Location:</b> {trailer.latitude}, {trailer.longitude}\n"
                 f"<b>Distance to Destination:</b> {int(trailer.calculate_distance_to_destination(load.delivery_location))} miles\n"
+                f"<b>ETA:</b> {trailer.calculate_eta(load.delivery_location)[0]}\n"
             )
 
         status_message += "\n⚠️ <b>Please ensure all protocols are followed.</b> ⚠️"
 
-        return status_message
+        return status_message, True, None
     except Load.DoesNotExist:
-        return "No load found for this driver."
+        return "No load found with the given ID.", False, None
     except Exception as e:
         logger.error(f"Error generating status message: {str(e)}")
-        return "An error occurred while generating the status message."
+        return "An error occurred while generating the status message.", False, None
+
+
+def process_telegram_update(update_json):
+    from .tasks import save_telegram_message
+
+    """
+    Parse the incoming update from Telegram and enqueue the message for saving.
+    Parameters:
+        update_json (str or dict): JSON string or dictionary containing the Telegram message update.
+    """
+    try:
+        update_data = json.loads(update_json) if isinstance(
+            update_json, str) else update_json
+
+        if 'message' in update_data:
+            message = update_data['message']
+            message_data = {
+                'chat_id': str(message['chat']['id']),
+                'user_id': str(message['from']['id']),
+                'username': message['from'].get('username'),
+                # Handle cases where there might be no text
+                'text': message.get('text', ''),
+                'date': timezone.datetime.fromtimestamp(message['date'])
+            }
+
+            # Queue the message saving to the Celery task
+            save_telegram_message.delay(message_data)
+            return "Message processing initiated successfully."
+    except Exception as e:
+        return f"Failed to process message: {str(e)}"
