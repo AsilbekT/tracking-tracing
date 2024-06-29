@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Broker, TelegramMessage, Load, Trailer, Driver
+from .models import Broker, SamsaraToken, TelegramBotToken, TelegramMessage, Load, Trailer, Driver
 
 admin.site.site_header = "TPA Cargo Solution Updating Management"
 admin.site.site_title = "TPA Cargo Admin Portal"
@@ -46,3 +46,19 @@ class TelegramMessageAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+class SamsaraTokenAdmin(admin.ModelAdmin):
+    list_display = ('description', 'created_at', 'updated_at')
+    list_filter = ('created_at',)
+    search_fields = ('description',)
+
+
+class TelegramBotTokenAdmin(admin.ModelAdmin):
+    list_display = ('bot_description', 'active', 'updated_at')
+    list_filter = ('active', 'created_at')
+    search_fields = ('bot_description',)
+
+
+admin.site.register(SamsaraToken, SamsaraTokenAdmin)
+admin.site.register(TelegramBotToken, TelegramBotTokenAdmin)

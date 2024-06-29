@@ -9,14 +9,15 @@ from .credentials import BOT_SETWEBHOOK_URL, SAMSARA_API_URL, SAMSARA_CLIENT_ID,
 
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-
+from .models import SamsaraToken
 
 logger = logging.getLogger(__name__)
 
 
 def get_authorization_url():
+    samsara_token = SamsaraToken.objects.first()
     params = {
-        'client_id': SAMSARA_CLIENT_ID,
+        'client_id': samsara_token.token,
         'redirect_uri': SAMSARA_REDIRECT_URI,
         'response_type': 'code',
         'state': 'random_state_string',

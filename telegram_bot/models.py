@@ -154,3 +154,26 @@ class TelegramMessage(models.Model):
 
     def __str__(self):
         return f"Message from {self.username} in group {self.group_id} at {self.date}"
+
+
+class SamsaraToken(models.Model):
+    token = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.description} - Updated on {self.updated_at.strftime('%Y-%m-%d %H:%M:%S')}"
+
+
+class TelegramBotToken(models.Model):
+    token = models.CharField(max_length=255)
+    bot_description = models.CharField(max_length=255, blank=True, null=True)
+    # You can deactivate tokens if needed
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        status = "Active" if self.active else "Inactive"
+        return f"{self.bot_description} ({status}) - Updated on {self.updated_at.strftime('%Y-%m-%d %H:%M:%S')}"
