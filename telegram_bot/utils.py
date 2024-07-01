@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_authorization_url():
-    samsara_token = SamsaraToken.objects.first()
+    samsara_token = SamsaraToken.objects.all().first()
     params = {
         'client_id': samsara_token.token,
         'redirect_uri': SAMSARA_REDIRECT_URI,

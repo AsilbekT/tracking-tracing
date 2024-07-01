@@ -134,6 +134,7 @@ venv.bak/
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow
 __pypackages__/
+__pycache__/
 
 # venv
 #   If you have multiple environments inside your project you may want to ignore them

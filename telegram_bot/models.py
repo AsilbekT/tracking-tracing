@@ -1,16 +1,14 @@
 from django.db import models
 from datetime import datetime, timedelta
 from math import radians, sin, cos, sqrt, atan2
-from geopy.geocoders import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
-from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
-import pytz
-from timezonefinder import TimezoneFinder
+import requests
 from django.utils.timezone import now
 from django.utils import timezone
+import pytz
+from timezonefinder import TimezoneFinder
 
-geolocator = Nominatim(user_agent="UniqueAppIdentifierForAsilbek")
-geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+from telegram_bot.credentials import MAPBOX_API_KEY
+
 AVERAGE_SPEED_MPH = 60
 
 
@@ -24,30 +22,44 @@ class Trailer(models.Model):
     def __str__(self):
         return self.name
 
+    def geocode_destination(self, destination_name):
+        url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{destination_name}.json"
+        params = {
+            'access_token': MAPBOX_API_KEY,
+            'limit': 1
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
+
+        if response.status_code == 200 and data['features']:
+            destination = data['features'][0]['geometry']['coordinates']
+            return destination[1], destination[0]  # latitude, longitude
+        else:
+            return None, f"Geocoding error: {data.get('message', 'Unable to fetch geocode')}"
+
     def calculate_distance_to_destination(self, destination_name):
         if self.latitude is None or self.longitude is None:
             return "Location coordinates are not available."
 
-        try:
-            # Using rate limited geocode
-            destination_location = geocode(destination_name)
-            if not destination_location:
-                return "Destination could not be geocoded."
+        destination_latitude, destination_longitude = self.geocode_destination(
+            destination_name)
+        if destination_latitude is None:
+            return destination_longitude  # This is the error message
 
-            destination_latitude = destination_location.latitude
-            destination_longitude = destination_location.longitude
-        except (GeocoderTimedOut, GeocoderUnavailable) as e:
-            return f"Geocoding error: {str(e)}"
+        url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{self.longitude},{self.latitude};{destination_longitude},{destination_latitude}"
+        params = {
+            'access_token': MAPBOX_API_KEY,
+            'geometries': 'geojson'
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
 
-        lat1, lon1, lat2, lon2 = map(radians, [
-                                     self.latitude, self.longitude, destination_latitude, destination_longitude])
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-        c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        R = 3958.8
-        distance = R * c
-        return distance
+        if response.status_code == 200 and data['routes']:
+            distance_meters = data['routes'][0]['distance']
+            distance_miles = distance_meters / 1609.34  # Convert meters to miles
+            return distance_miles
+        else:
+            return f"Error: {data.get('message', 'Unable to fetch distance')}"
 
     def calculate_eta(self, destination_name):
         if self.latitude is None or self.longitude is None:
@@ -60,11 +72,12 @@ class Trailer(models.Model):
         hours_to_destination = distance / AVERAGE_SPEED_MPH
         eta_utc = timezone.now() + timedelta(hours=hours_to_destination)
         tf = TimezoneFinder()
-        destination_location = geocode(destination_name)
-        if not destination_location:
-            return None, "Could not determine destination timezone"
+        destination_latitude, destination_longitude = self.geocode_destination(
+            destination_name)
+        if destination_latitude is None:
+            return None, destination_longitude  # This is the error message
         timezone_str = tf.timezone_at(
-            lat=destination_location.latitude, lng=destination_location.longitude)
+            lat=destination_latitude, lng=destination_longitude)
         if not timezone_str:
             return None, "Timezone could not be determined"
         destination_tz = pytz.timezone(timezone_str)
@@ -110,7 +123,7 @@ class Load(models.Model):
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default='pending')
     assigned_driver = models.ForeignKey(
-        Driver, on_delete=models.CASCADE, related_name="laods")
+        Driver, on_delete=models.CASCADE, related_name="loads")
     assigned_trailer = models.ForeignKey(
         Trailer, on_delete=models.CASCADE, related_name="loads_trailer", null=True, blank=True)
     assigned_broker = models.ForeignKey(
